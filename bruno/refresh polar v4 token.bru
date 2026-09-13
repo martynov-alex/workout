@@ -1,0 +1,31 @@
+meta {
+  name: Refresh Polar v4 token
+  type: http
+  seq: 3
+}
+
+post {
+  url: https://auth.polar.com/oauth/token
+  body: formUrlEncoded
+  auth: basic
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+  Accept: application/json
+}
+
+auth:basic {
+  username: {{client_id}}
+  password: {{client_secret}}
+}
+
+body:form-urlencoded {
+  grant_type: refresh_token
+  refresh_token: {{refresh_token}}
+}
+
+docs {
+  Обновление access token Polar API v4. Подставь актуальный `refresh_token` из `.polar_token`.
+  Новый `access_token` и `refresh_token` снова запиши в `.polar_token`.
+}

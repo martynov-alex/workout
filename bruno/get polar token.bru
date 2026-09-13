@@ -1,0 +1,43 @@
+meta {
+  name: Get Polar token
+  type: http
+  seq: 1
+}
+
+post {
+  url: https://polarremote.com/v2/oauth2/token
+  body: formUrlEncoded
+  auth: basic
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+  Accept: application/json;charset=UTF-8
+}
+
+auth:basic {
+  username: {{client_id}}
+  password: {{client_secret}}
+}
+
+body:form-urlencoded {
+  grant_type: authorization_code
+  code: 06acf457befc0aed8d8c723c3097cf7e
+  redirect_uri: {{redirect_uri}}
+}
+
+docs {
+  Обмен authorization code на access token Polar AccessLink.
+  
+  `client_id` и `client_secret` уходят в HTTP Basic, не в тело запроса.
+  Отдельно Polar не выдаёт user-токен только по client credentials.
+  
+  1. В [admin.polaraccesslink.com](https://admin.polaraccesslink.com) у приложения должен быть тот же Redirect URL, что в `redirect_uri`.
+  2. Открой в браузере (подставь свой `client_id`):
+  
+     https://flow.polar.com/oauth2/authorization?response_type=code&client_id={{client_id}}&scope=accesslink.read_all&redirect_uri={{redirect_uri}}
+  
+  3. После логина в URL будет `?code=...`. Скопируй код в переменную `authorization_code` (живёт 10 минут, один раз).
+  4. Отправь этот запрос. В ответе будет `access_token` — его можно положить в `.polar_token` как `POLAR_ACCESS_TOKEN=...`.
+  5. Один раз зарегистрируй пользователя: `POST https://www.polaraccesslink.com/v3/users` с Bearer-токеном.
+}

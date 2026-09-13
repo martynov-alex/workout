@@ -1,0 +1,43 @@
+meta {
+  name: Get Polar v4 token
+  type: http
+  seq: 2
+}
+
+post {
+  url: https://auth.polar.com/oauth/token
+  body: formUrlEncoded
+  auth: basic
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+  Accept: application/json
+}
+
+auth:basic {
+  username: {{client_id}}
+  password: {{client_secret}}
+}
+
+body:form-urlencoded {
+  grant_type: authorization_code
+  code: h0s5FB
+  redirect_uri: {{redirect_uri}}
+}
+
+docs {
+  Обмен authorization code на access + refresh token Polar API v4.
+  
+  1. Открой в браузере (подставь свой client_id):
+  
+     https://auth.polar.com/oauth/authorize?client_id=CLIENT_ID&response_type=code&scope=training_sessions:read sports:read&redirect_uri=http://localhost:8765/callback
+  
+  2. Скопируй `code` в `authorization_code` (10 минут, один раз).
+  3. Отправь запрос. В `.polar_token` допиши:
+  
+     POLAR_V4_ACCESS_TOKEN=...
+     POLAR_V4_REFRESH_TOKEN=...
+  
+  Access token живёт 12 часов, дальше — запрос Refresh Polar v4 token.
+}
