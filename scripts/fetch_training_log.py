@@ -7,11 +7,14 @@ import argparse
 import base64
 import csv
 import json
+import secrets as secrets_lib
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from datetime import date, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +23,11 @@ TOKEN_FILE = REPO_ROOT / ".polar_token"
 API_SESSIONS = "https://www.polaraccesslink.com/v4/data/training-sessions/list"
 API_SPORTS = "https://www.polaraccesslink.com/v4/data/sports/list"
 API_TOKEN = "https://auth.polar.com/oauth/token"
+API_AUTHORIZE = "https://auth.polar.com/oauth/authorize"
+REDIRECT_HOST = "localhost"
+REDIRECT_PORT = 8765
+REDIRECT_URI = f"http://{REDIRECT_HOST}:{REDIRECT_PORT}/callback"
+SCOPE = "training_sessions:read sports:read"
 FEATURES = ("statistics", "zones", "training-load-report")
 DATE_IN = "%d.%m.%Y"
 
@@ -143,6 +151,11 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CSV,
         help="CSV для записи. По умолчанию 2026-2027/training log/training log.csv",
     )
+    parser.add_argument(
+        "--login",
+        action="store_true",
+        help="Авторизоваться в браузере и записать новую пару v4 токенов в .polar_token.",
+    )
     return parser.parse_args()
 
 
@@ -182,6 +195,91 @@ def monday_sunday(week: str | None, day_text: str | None) -> tuple[date, date]:
     return monday, monday + timedelta(days=6)
 
 
+def client_credentials(values: dict[str, str]) -> tuple[str, str]:
+    client_id = values.get("POLAR_CLIENT_ID")
+    client_secret = values.get("POLAR_CLIENT_SECRET")
+    if not (client_id and client_secret):
+        raise SystemExit("Добавь в .polar_token POLAR_CLIENT_ID и POLAR_CLIENT_SECRET.")
+    return client_id, client_secret
+
+
+def request_token(values: dict[str, str], form: dict[str, str]) -> dict:
+    client_id, client_secret = client_credentials(values)
+    request = urllib.request.Request(
+        API_TOKEN,
+        data=urllib.parse.urlencode(form).encode(),
+        method="POST",
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
+    )
+    credentials = f"{client_id}:{client_secret}".encode()
+    request.add_header("Authorization", "Basic " + base64.b64encode(credentials).decode())
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise SystemExit(
+            f"Polar OAuth {exc.code} {exc.reason}. {detail} "
+            "Получи новую пару токенов: python3 scripts/fetch_training_log.py --login"
+        ) from exc
+
+
+def store_tokens(values: dict[str, str], payload: dict) -> None:
+    values["POLAR_V4_ACCESS_TOKEN"] = payload["access_token"]
+    if payload.get("refresh_token"):
+        values["POLAR_V4_REFRESH_TOKEN"] = payload["refresh_token"]
+    save_secrets(values)
+
+
+def login() -> None:
+    values = load_secrets()
+    client_id, _ = client_credentials(values)
+    state = secrets_lib.token_urlsafe(16)
+    url = API_AUTHORIZE + "?" + urllib.parse.urlencode(
+        {
+            "client_id": client_id,
+            "response_type": "code",
+            "scope": SCOPE,
+            "redirect_uri": REDIRECT_URI,
+            "state": state,
+        }
+    )
+    result: dict[str, str] = {}
+
+    class Callback(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            result.update({key: items[0] for key, items in query.items()})
+            ok = "code" in result and result.get("state") == state
+            self.send_response(200 if ok else 400)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            text = "Готово, окно можно закрыть." if ok else "Ошибка авторизации, смотри терминал."
+            self.wfile.write(f"<p>{text}</p>".encode())
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = HTTPServer((REDIRECT_HOST, REDIRECT_PORT), Callback)
+    print(f"Открой в браузере и войди в Polar:\n{url}", flush=True)
+    webbrowser.open(url)
+    while "code" not in result and "error" not in result:
+        server.handle_request()
+    server.server_close()
+
+    if "error" in result or result.get("state") != state:
+        raise SystemExit(f"Авторизация не удалась: {result.get('error') or 'state не совпал'}")
+    payload = request_token(
+        values,
+        {"grant_type": "authorization_code", "code": result["code"], "redirect_uri": REDIRECT_URI},
+    )
+    store_tokens(values, payload)
+    print("Новая пара Polar v4 токенов записана в .polar_token.")
+
+
 class PolarV4:
     def __init__(self, secrets: dict[str, str]) -> None:
         self.secrets = secrets
@@ -189,39 +287,19 @@ class PolarV4:
         if not self.token:
             raise SystemExit(
                 "Нет POLAR_V4_ACCESS_TOKEN в .polar_token. "
-                "Получи токен через Bruno: bruno/get polar v4 token.bru"
+                "Получи токен: python3 scripts/fetch_training_log.py --login"
             )
 
     def refresh(self) -> None:
         refresh = self.secrets.get("POLAR_V4_REFRESH_TOKEN")
-        client_id = self.secrets.get("POLAR_CLIENT_ID")
-        client_secret = self.secrets.get("POLAR_CLIENT_SECRET")
-        if not (refresh and client_id and client_secret):
+        if not refresh:
             raise SystemExit(
-                "Access token v4 истёк. Обнови через Bruno refresh polar v4 token.bru "
-                "или добавь в .polar_token POLAR_V4_REFRESH_TOKEN, POLAR_CLIENT_ID, POLAR_CLIENT_SECRET."
+                "Access token v4 истёк, refresh token отсутствует. "
+                "Получи новую пару: python3 scripts/fetch_training_log.py --login"
             )
-        body = urllib.parse.urlencode(
-            {"grant_type": "refresh_token", "refresh_token": refresh}
-        ).encode()
-        request = urllib.request.Request(
-            API_TOKEN,
-            data=body,
-            method="POST",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "application/json",
-            },
-        )
-        credentials = f"{client_id}:{client_secret}".encode()
-        request.add_header("Authorization", "Basic " + base64.b64encode(credentials).decode())
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        payload = request_token(self.secrets, {"grant_type": "refresh_token", "refresh_token": refresh})
         self.token = payload["access_token"]
-        self.secrets["POLAR_V4_ACCESS_TOKEN"] = self.token
-        if payload.get("refresh_token"):
-            self.secrets["POLAR_V4_REFRESH_TOKEN"] = payload["refresh_token"]
-        save_secrets(self.secrets)
+        store_tokens(self.secrets, payload)
         print("Обновлён Polar v4 access token.", file=sys.stderr)
 
     def get(self, url: str, retry: bool = True) -> object:
@@ -544,6 +622,9 @@ def print_week(rows: list[list[str]]) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.login:
+        login()
+        return
     monday, sunday = monday_sunday(args.week, args.date)
     client = PolarV4(load_secrets())
     sports = sport_names(client)

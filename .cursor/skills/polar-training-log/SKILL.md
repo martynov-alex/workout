@@ -15,17 +15,12 @@ description: >-
 
 Отдельный OAuth, не тот же, что для cardio load.
 
-1. Браузер: `https://auth.polar.com/oauth/authorize?client_id=...&response_type=code&scope=training_sessions:read sports:read&redirect_uri=http://localhost:8765/callback`
-2. Bruno `bruno/get polar v4 token.bru` → в `.polar_token`:
+В `.polar_token` должны быть `POLAR_CLIENT_ID`, `POLAR_CLIENT_SECRET`, `POLAR_V4_ACCESS_TOKEN`, `POLAR_V4_REFRESH_TOKEN`.
 
-```
-POLAR_V4_ACCESS_TOKEN=...
-POLAR_V4_REFRESH_TOKEN=...
-```
-
-3. Для автообновления скриптом добавь ещё `POLAR_CLIENT_ID` и `POLAR_CLIENT_SECRET`. Иначе при 401 — `bruno/refresh polar v4 token.bru`.
-4. `POLAR_ACCESS_TOKEN` (v3) не трогать — он для кардионагрузки.
-5. Токены не печатать и не коммитить. Access v4 живёт 12 часов.
+1. Access v4 живёт 12 часов — при 401 скрипт сам обновляет его по refresh token и сохраняет в `.polar_token`.
+2. Если refresh token протух (ошибка `Polar OAuth 4xx`) или v4-токенов нет — запустить в фоне с полным доступом `python3 scripts/fetch_training_log.py --login`: откроется браузер, пользователь входит в Polar, локальный callback на `localhost:8765` ловит код, скрипт пишет новую пару токенов. Дождаться строки «Новая пара Polar v4 токенов записана», затем повторить выгрузку.
+3. `POLAR_ACCESS_TOKEN` (v3) не трогать — он для кардионагрузки.
+4. Токены не печатать и не коммитить; при выводе URL авторизации маскировать `client_id`.
 
 ## Workflow
 
