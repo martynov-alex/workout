@@ -1,13 +1,13 @@
 ## Анализ прошедшего периода
 
-- Используя скиллы polar-cardio-load и polar-training-log загрузи тренировочные данные из Polar за `41  неделю 2026 года`
+- Используя скиллы garmin-training-log и garmin-health загрузи данные из Garmin за `42 неделю 2026 года`
 - Проведи анализ
 
 Учитывай:
 - цели по макроциклу macrocycle.md
 - план на неделю training plan/training plan.csv
-- результаты тренировок из training log/training log.csv
-- результаты по кардионагрузке из cardio load/cardio load.csv
+- результаты тренировок из garmin/activities.csv, garmin/laps.csv, garmin/strength sets.csv
+- восстановление и нагрузку из garmin/daily health.csv и garmin/training status.csv
 
 ## Планирование нового
 
@@ -24,8 +24,8 @@
 
 1. Учитывай макроцикл macrocycle.md как главный ориентир для разработки планов. Помни, что главная цель всех тренировок — горный трейл.
 2. Учитывай результаты тренировок прошлой недели:
-    - журнал тренировок `training log/training log.csv`
-    - журнал кардионагрузки `cardio load/cardio load.csv`
+    - журнал тренировок `garmin/activities.csv` (круги — `garmin/laps.csv`, подходы — `garmin/strength sets.csv`)
+    - сон, HRV, готовность и нагрузку `garmin/daily health.csv`, `garmin/training status.csv`
 
 Общие пожелания и вопросы:
 

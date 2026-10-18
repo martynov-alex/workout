@@ -1,2 +1,5 @@
 .DS_Store
 .polar_token
+.venv/
+.garmin_cache/
+__pycache__/
