@@ -178,6 +178,7 @@ ACTIVITY_TYPES = {
     "pilates": "Пилатес",
     "mobility": "Мобилити",
     "breathwork": "Дыхательная практика",
+    "stop_watch": "Секундомер",
     "meditation": "Медитация",
     "multi_sport": "Мультиспорт",
     "transition": "Транзит",
